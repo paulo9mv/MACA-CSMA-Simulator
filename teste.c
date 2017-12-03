@@ -14,6 +14,11 @@
 
 #define PORT 3900
 
+typedef struct data{
+    int station;
+    int port;
+}Data;
+
 char *payload(char payload[],int station){
     int i;
     for(i = 0; i < 800; i++, station++){
@@ -39,7 +44,9 @@ void *receiver(void *a){
     int newConnection;
     int read_size;
     struct sockaddr_in receiveAddr;
-    int port = *((int*) a);
+    Data d = *(Data *)a;
+    int port = d.port;
+    int station = d.station;
     char buffer[305];
 
     if(sock < 0){
@@ -62,7 +69,7 @@ void *receiver(void *a){
         exit(1);
     }
 
-    printf("Connect sucessfull on port %d\n", port);
+    printf("Connect %d\n", port);
 
     read_size = recv(newConnection, buffer, 305, 0);
     if(read_size > 0)
@@ -75,7 +82,10 @@ void *sender(void *a){
     struct sockaddr_in receiveAddr;
     int read_size;
 
-    int port = *((int*) a);
+    Data d = *(Data *)a;
+    int port = d.port;
+    int station = d.station;
+
     char *buffer = "909099241717 me chama no zap";
 
     if(sock < 0){
@@ -90,33 +100,35 @@ void *sender(void *a){
     receiveAddr.sin_port = htons(port);
 
     if(connect(sock, (struct sockaddr*)&receiveAddr, sizeof(receiveAddr)) < 0){
-        printf("Connect fail\n");
+        printf("Connect fail %d\n", port);
         exit(1);
     }
-    printf("Connect OK no port %d\n", port);
+    printf("Connect %d\n", port);
 
     write(sock, buffer, sizeof(buffer) + 50);
 }
 
 int main(){
-    pid_t process = fork();
+    int N = 10, i;
     pthread_t thread[2];
     int port1 = 2888, port2 = 3788;
+    int j ;
 
-    if(process == 0){
-        pthread_create(&thread[1], NULL, receiver, (void *)&port1);
-        pthread_create(&thread[2], NULL, sender, (void *)&port2);
+    for(i = 0; i < N; i++){
+        if(fork() == 0){
+            Data t;
+            t.station = i;
+            t.port = i + 3100;
 
-        pthread_join(thread[1], NULL);
-        pthread_join(thread[2], NULL);
+
+            pthread_create(&thread[1], NULL, receiver, (void *)&t);
+            pthread_create(&thread[2], NULL, sender, (void *)&t);
+
+            pthread_join(thread[1], NULL);
+            pthread_join(thread[2], NULL);
+            exit(0);
     }
-    else{
-        pthread_create(&thread[1], NULL, receiver, (void *)&port2);
-        pthread_create(&thread[2], NULL, sender, (void *)&port1);
-
-        pthread_join(thread[1], NULL);
-        pthread_join(thread[2], NULL);
-    }
+}
 
     return 0;
 }
