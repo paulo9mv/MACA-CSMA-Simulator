@@ -62,6 +62,10 @@ void *receive(){
     time_t ticks;
 
     listenfd = socket(AF_INET, SOCK_STREAM, 0);
+    if(listenfd < 0){
+        printf("Socket error!\n");
+        exit(1);
+    }
     memset(&serv_addr, '0', sizeof(serv_addr));
     memset(sendBuff, '0', sizeof(sendBuff));
 
@@ -75,6 +79,7 @@ void *receive(){
 
     while(1)
     {
+        printf("Aguardando conexão\n");
         connfd = accept(listenfd, (struct sockaddr*)NULL, NULL);
 
         ticks = time(NULL);
@@ -90,8 +95,6 @@ void *sendThread(){
     char recvBuff[1024];
     struct sockaddr_in serv_addr;
 
-
-
     memset(recvBuff, '0',sizeof(recvBuff));
     if((sockfd = socket(AF_INET, SOCK_STREAM, 0)) < 0)
     {
@@ -104,43 +107,48 @@ void *sendThread(){
     serv_addr.sin_family = AF_INET;
     serv_addr.sin_port = htons(5000);
 
-    if(inet_pton(AF_INET, "255.255.255.255", &serv_addr.sin_addr)<=0)
+    if(inet_pton(AF_INET, "127.0.0.1", &serv_addr.sin_addr)<=0)
     {
         printf("\n inet_pton error occured\n");
         exit(1);
     }
+    else{
+        printf("OK\n");
+    }
 
-    if( connect(sockfd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0)
+    if(connect(sockfd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0)
     {
        printf("\n Error : Connect Failed \n");
        exit(1);
     }
-
-    while ( (n = read(sockfd, recvBuff, sizeof(recvBuff)-1)) > 0)
-    {
-        recvBuff[n] = 0;
-        if(fputs(recvBuff, stdout) == EOF)
-        {
-            printf("\n Error : Fputs error\n");
-        }
+    else{
+        printf("CONNECTION SUCESSFULL!\n");
     }
-
-    if(n < 0)
-    {
-        printf("\n Read error \n");
-    }
+    write(sockfd, )
 
     exit(1);
 }
 int main(){
     pthread_t thread, thread2;
 
-    pthread_create(&thread, NULL, receive, NULL);
-    sleep(1);
-    pthread_create(&thread2, NULL, sendThread, NULL);
+    pid_t process;
+    process = fork();
 
+    if(process == 0){
+        printf("Filho: %d\n", process);
+        sleep(1);
+        pthread_create(&thread, NULL, receive, NULL);
+        pthread_join(thread, NULL);
+    }
+else{
+    printf("Pai: %d\n", process);
+    sleep(2);
+    pthread_create(&thread2, NULL, sendThread, NULL);
     pthread_join(thread2, NULL);
-    pthread_join(thread, NULL);
+}
+
+
+
 
     char data[800];
     payload(data, 920);

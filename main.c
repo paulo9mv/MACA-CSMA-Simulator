@@ -55,70 +55,103 @@ void *new_conection(void *a){
 	close(newsock);
 }
 void *receive(){
-    int i = 0;
-	int newsockfd;
-	int portno;
-	int clilen;
-	char buffer[801];
-	struct sockaddr_in serv_addr;
-	struct sockaddr_in cli_addr;
-	pthread_t threads[100];
+    int listenfd = 0, connfd = 0;
+    struct sockaddr_in serv_addr;
 
-    int sockfd;
+    char sendBuff[1025];
+    time_t ticks;
 
-    //Inicializa o socket
-    sockfd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-    if(sockfd < 0) {
-		printf("Socket error!\n");
-		exit(1);
-	}
+    listenfd = socket(AF_INET, SOCK_STREAM, 0);
+    memset(&serv_addr, '0', sizeof(serv_addr));
+    memset(sendBuff, '0', sizeof(sendBuff));
+
+    serv_addr.sin_family = AF_INET;
+    serv_addr.sin_addr.s_addr = htonl(INADDR_ANY);
+    serv_addr.sin_port = htons(5000);
+
+    bind(listenfd, (struct sockaddr*)&serv_addr, sizeof(serv_addr));
+
+    listen(listenfd, 10);
+
+    while(1)
+    {
+        connfd = accept(listenfd, (struct sockaddr*)NULL, NULL);
+
+        ticks = time(NULL);
+        snprintf(sendBuff, sizeof(sendBuff), "%.24s\r\n", ctime(&ticks));
+        write(connfd, sendBuff, strlen(sendBuff));
+
+        close(connfd);
+        sleep(1);
+     }
+}
+void *sendThread(){
+    int sockfd = 0, n = 0;
+    char recvBuff[1024];
+    struct sockaddr_in serv_addr;
 
 
 
-	memset((char*) &serv_addr, 0, sizeof(serv_addr));
+    memset(recvBuff, '0',sizeof(recvBuff));
+    if((sockfd = socket(AF_INET, SOCK_STREAM, 0)) < 0)
+    {
+        printf("\n Error : Could not create socket \n");
+        exit(1);
+    }
 
-	portno = 10;
-	serv_addr.sin_family = AF_INET;
-	serv_addr.sin_addr.s_addr = INADDR_ANY;
-	serv_addr.sin_port = htons(portno);
-	if(bind(sockfd, (struct sockaddr*) &serv_addr, sizeof(serv_addr)) < 0) {
-		printf("Socket error!\n");
-		exit(1);
-	}
+    memset(&serv_addr, '0', sizeof(serv_addr));
 
-	listen(sockfd, 100);
-	clilen = sizeof(cli_addr);
+    serv_addr.sin_family = AF_INET;
+    serv_addr.sin_port = htons(5000);
 
-    while(newsockfd = accept(sockfd, (struct sockaddr*) &cli_addr, (unsigned int*) &clilen)) {
-		if(pthread_create(&(threads[i++]), NULL, new_conection, (void*) &newsockfd) < 0) {
-			printf("Thread creation error!\n");
-			exit(1);
-		}
-	}
+    if(inet_pton(AF_INET, "255.255.255.255", &serv_addr.sin_addr)<=0)
+    {
+        printf("\n inet_pton error occured\n");
+        exit(1);
+    }
 
-	if(newsockfd < 0) {
-		printf("Newsocket error!\n");
-		exit(1);
-	}
+    if( connect(sockfd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0)
+    {
+       printf("\n Error : Connect Failed \n");
+       exit(1);
+    }
+
+    while ( (n = read(sockfd, recvBuff, sizeof(recvBuff)-1)) > 0)
+    {
+        recvBuff[n] = 0;
+        if(fputs(recvBuff, stdout) == EOF)
+        {
+            printf("\n Error : Fputs error\n");
+        }
+    }
+
+    if(n < 0)
+    {
+        printf("\n Read error \n");
+    }
+
+    exit(1);
 }
 int main(){
-    int sock;
     pthread_t thread, thread2;
 
-    //Inicializa o socket
-    sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-    if(sock < 0) {
-		printf("Socket error\n");
-		exit(1);
-	}
+    pid_t process = fork();
 
+    if(process == 0){
+        printf("Filho\n");
     pthread_create(&thread, NULL, receive, NULL);
+pthread_join(thread, NULL);
+}
+    else{
+        printf("Pai\n");
     pthread_create(&thread2, NULL, sendThread, NULL);
 
-    pthread_join(thread2, NULL);
-    pthread_join(thread, NULL);
+    pthread_join(thread2, NULL);}
+
 
     char data[800];
     payload(data, 920);
+
+    return 0;
 
 }
