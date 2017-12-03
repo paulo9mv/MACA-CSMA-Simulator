@@ -55,14 +55,12 @@ void *new_conection(void *a){
 	close(newsock);
 }
 void *receive(){
-    int listenfd = 0, connfd = 0;
+    int sock, sockConnect;
     struct sockaddr_in serv_addr;
 
-    char sendBuff[1025];
-    time_t ticks;
+    char sendBuff[200];
 
-    listenfd = socket(AF_INET, SOCK_STREAM, 0);
-    if(listenfd < 0){
+    if(sock = socket(AF_INET, SOCK_STREAM, 0) < 0){
         printf("Socket error!\n");
         exit(1);
     }
@@ -73,20 +71,25 @@ void *receive(){
     serv_addr.sin_addr.s_addr = htonl(INADDR_ANY);
     serv_addr.sin_port = htons(5000);
 
-    bind(listenfd, (struct sockaddr*)&serv_addr, sizeof(serv_addr));
+    bind(sock, (struct sockaddr*)&serv_addr, sizeof(serv_addr));
 
-    listen(listenfd, 10);
+    listen(sock, 10);
 
     while(1)
     {
         printf("Aguardando conexão\n");
-        connfd = accept(listenfd, (struct sockaddr*)NULL, NULL);
+        sockConnect = accept(sock, (struct sockaddr*)NULL, NULL);
 
-        ticks = time(NULL);
-        snprintf(sendBuff, sizeof(sendBuff), "%.24s\r\n", ctime(&ticks));
-        write(connfd, sendBuff, strlen(sendBuff));
 
-        close(connfd);
+        if(read(sockConnect, sendBuff, 36) > 0){
+
+            printf("%s\n", sendBuff);
+        }
+        else{
+            printf("Falha na leitura\n");
+            exit(1);
+        }
+        close(sockConnect);
         sleep(1);
      }
 }
@@ -121,20 +124,41 @@ void *sendThread(){
        printf("\n Error : Connect Failed \n");
        exit(1);
     }
-    else{
-        printf("CONNECTION SUCESSFULL!\n");
+
+    if(send(sockfd, "This will be output to standard out\n", 36,0) < 0 ){
+        printf("Send failed\n");
+        exit(1);
     }
-    write(sockfd, )
 
     exit(1);
 }
 int main(){
     pthread_t thread, thread2;
 
-    pid_t process;
-    process = fork();
+    pid_t process[10];
+    int i;
+    int n = 10;
 
-    if(process == 0){
+/* Start children. */
+    for (i = 0; i < n; ++i) {
+        if ((process[i] = fork()) < 0) {
+            printf("Erro na forkagem\n");
+            abort();
+        }
+        else if (process[i] == 0) {
+            printf("Filho: %d\n", process[i]);
+
+            printf("Criando a thread RECEIVE\n");
+            pthread_create(&thread, NULL, receive, NULL);
+            printf("Criando a thread SEND\n");
+            pthread_create(&thread2, NULL, sendThread, NULL);
+
+            pthread_join(thread, NULL);
+            pthread_join(thread2, NULL);
+        }
+    }
+
+    /*if(process == 0){
         printf("Filho: %d\n", process);
         sleep(1);
         pthread_create(&thread, NULL, receive, NULL);
@@ -145,7 +169,7 @@ else{
     sleep(2);
     pthread_create(&thread2, NULL, sendThread, NULL);
     pthread_join(thread2, NULL);
-}
+}*/
 
 
 
