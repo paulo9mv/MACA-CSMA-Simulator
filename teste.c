@@ -11,9 +11,9 @@
 #include<time.h>
 #include<pthread.h>
 #include<err.h>
-void quebra(){
-    printf("\n");
-}
+
+#define PORT 3900
+
 char *payload(char payload[],int station){
     int i;
     for(i = 0; i < 800; i++, station++){
@@ -33,150 +33,90 @@ char *payload(char payload[],int station){
     }
     return payload;
 }
-void *new_conection(void *a){
-    int newsock = *(int*)a;
 
-    char buffer[801];
+void *receiver(void *a){
+    int sock = socket(AF_INET, SOCK_STREAM, 0);
+    int newConnection;
+    int read_size;
+    struct sockaddr_in receiveAddr;
+    int port = *((int*) a);
+    char buffer[305];
 
-	memset(buffer, 0, sizeof(buffer));
-
-	if(read(newsock, buffer, sizeof(buffer)) < 0) {
-		printf("Read error\n");
-		exit(1);
-	}
-
-	printf("Here is the message: %s", buffer);
-
-	if(write(newsock, "Recebi a mensagem", 18) < 0) {
-		printf("Send error\n");
-		exit(1);
-	}
-
-	close(newsock);
-}
-void *receive(){
-    int sock, sockConnect;
-    struct sockaddr_in serv_addr;
-
-    char sendBuff[200];
-
-    if(sock = socket(AF_INET, SOCK_STREAM, 0) < 0){
-        printf("Socket error!\n");
-        exit(1);
-    }
-    memset(&serv_addr, '0', sizeof(serv_addr));
-    memset(sendBuff, '0', sizeof(sendBuff));
-
-    serv_addr.sin_family = AF_INET;
-    serv_addr.sin_addr.s_addr = htonl(INADDR_ANY);
-    serv_addr.sin_port = htons(5000);
-
-    bind(sock, (struct sockaddr*)&serv_addr, sizeof(serv_addr));
-
-    listen(sock, 10);
-
-    while(1)
-    {
-        printf("Aguardando conexão\n");
-        sockConnect = accept(sock, (struct sockaddr*)NULL, NULL);
-
-
-        if(read(sockConnect, sendBuff, 36) > 0){
-
-            printf("%s\n", sendBuff);
-        }
-        else{
-            printf("Falha na leitura\n");
-            exit(1);
-        }
-        close(sockConnect);
-        sleep(1);
-     }
-}
-void *sendThread(){
-    int sockfd = 0, n = 0;
-    char recvBuff[1024];
-    struct sockaddr_in serv_addr;
-
-    memset(recvBuff, '0',sizeof(recvBuff));
-    if((sockfd = socket(AF_INET, SOCK_STREAM, 0)) < 0)
-    {
-        printf("\n Error : Could not create socket \n");
+    if(sock < 0){
+        printf("Erro no socket\n");
         exit(1);
     }
 
-    memset(&serv_addr, '0', sizeof(serv_addr));
+    memset(&receiveAddr, 0, sizeof(receiveAddr));
 
-    serv_addr.sin_family = AF_INET;
-    serv_addr.sin_port = htons(5000);
+    receiveAddr.sin_family = AF_INET;
+    receiveAddr.sin_addr.s_addr = htonl(INADDR_ANY);
+    receiveAddr.sin_port = htons(port);
 
-    if(inet_pton(AF_INET, "127.0.0.1", &serv_addr.sin_addr)<=0)
-    {
-        printf("\n inet_pton error occured\n");
+    bind(sock, (struct sockaddr*)&receiveAddr, sizeof(receiveAddr));
+    listen(sock, 5);
+
+    newConnection = accept(sock, (struct sockaddr*)NULL, NULL);
+    if(newConnection < 0){
+        printf("Connection failed\n");
         exit(1);
+    }
+
+    printf("Connect sucessfull on port %d\n", port);
+
+    read_size = recv(newConnection, buffer, 305, 0);
+    if(read_size > 0)
+        printf("Recebido da port %d %s\n", port, buffer);
+
+
+}
+void *sender(void *a){
+    int sock = socket(AF_INET, SOCK_STREAM, 0);
+    struct sockaddr_in receiveAddr;
+    int read_size;
+
+    int port = *((int*) a);
+    char *buffer = "909099241717 me chama no zap";
+
+    if(sock < 0){
+        printf("Erro no socket\n");
+        exit(1);
+    }
+
+    memset(&receiveAddr, 0, sizeof(receiveAddr));
+
+    receiveAddr.sin_family = AF_INET;
+    receiveAddr.sin_addr.s_addr = htonl(INADDR_ANY);
+    receiveAddr.sin_port = htons(port);
+
+    if(connect(sock, (struct sockaddr*)&receiveAddr, sizeof(receiveAddr)) < 0){
+        printf("Connect fail\n");
+        exit(1);
+    }
+    printf("Connect OK no port %d\n", port);
+
+    write(sock, buffer, sizeof(buffer) + 50);
+}
+
+int main(){
+    pid_t process = fork();
+    pthread_t thread[2];
+    int port1 = 2888, port2 = 3788;
+
+    if(process == 0){
+        pthread_create(&thread[1], NULL, receiver, (void *)&port1);
+        pthread_create(&thread[2], NULL, sender, (void *)&port2);
+
+        pthread_join(thread[1], NULL);
+        pthread_join(thread[2], NULL);
     }
     else{
-        printf("OK\n");
+        pthread_create(&thread[1], NULL, receiver, (void *)&port2);
+        pthread_create(&thread[2], NULL, sender, (void *)&port1);
+
+        pthread_join(thread[1], NULL);
+        pthread_join(thread[2], NULL);
     }
-
-    if(connect(sockfd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0)
-    {
-       printf("\n Error : Connect Failed \n");
-       exit(1);
-    }
-
-    if(send(sockfd, "This will be output to standard out\n", 36,0) < 0 ){
-        printf("Send failed\n");
-        exit(1);
-    }
-
-    exit(1);
-}
-int main(){
-    pthread_t thread, thread2;
-
-    pid_t process[10];
-    int i;
-    int n = 10;
-
-/* Start children. */
-    for (i = 0; i < n; ++i) {
-        if ((process[i] = fork()) < 0) {
-            printf("Erro na forkagem\n");
-            abort();
-        }
-        else if (process[i] == 0) {
-            printf("Filho: %d\n", process[i]);
-
-            printf("Criando a thread RECEIVE\n");
-            pthread_create(&thread, NULL, receive, NULL);
-            printf("Criando a thread SEND\n");
-            pthread_create(&thread2, NULL, sendThread, NULL);
-
-            pthread_join(thread, NULL);
-            pthread_join(thread2, NULL);
-        }
-    }
-
-    /*if(process == 0){
-        printf("Filho: %d\n", process);
-        sleep(1);
-        pthread_create(&thread, NULL, receive, NULL);
-        pthread_join(thread, NULL);
-    }
-else{
-    printf("Pai: %d\n", process);
-    sleep(2);
-    pthread_create(&thread2, NULL, sendThread, NULL);
-    pthread_join(thread2, NULL);
-}*/
-
-
-
-
-    char data[800];
-    payload(data, 920);
 
     return 0;
-
 }
