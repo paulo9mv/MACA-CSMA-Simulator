@@ -13,39 +13,52 @@
 #include<err.h>
 
 #define PORT 3900
+#define BUFFERSIZE 20
 
 typedef struct data{
     int station;
     int port;
+    int newConnection;
 }Data;
 
-char *payload(char payload[],int station){
+void *payload(char payload[],int station){
     int i;
-    for(i = 0; i < 800; i++, station++){
+    for(i = 0; i < BUFFERSIZE; i++, station++){
         if(station < 10)
             payload[i] = station + '0';
         else if(station < 100){
             payload[i] = (station / 10) + '0';
-            if(i + 1 < 800)
+            if(i + 1 < BUFFERSIZE)
                 payload[++i] = (station % 10) + '0';
         }else{
             payload[i] = (station / 100) + '0';
-            if(i + 1 < 800)
+            if(i + 1 < BUFFERSIZE)
                 payload[++i] = (station/10)%10 + '0';
-            if(i + 1 < 800)
+            if(i + 1 < BUFFERSIZE)
                 payload[++i] = station % 10 + '0';
         }
     }
-    return payload;
 }
+void *receiveIndividual(void *a){
+    Data d = *(Data *)a;
+    int socket = d.newConnection;
+    int station = d.station;
+    char buffer[300];
+    int read_size = recv(socket, buffer, 100, 0);
 
+    if(read_size > 0)
+        printf("Estação %d recebeu %s\n",station ,buffer);
+
+}
 void *receiver(void *a){
     int sock = socket(AF_INET, SOCK_STREAM, 0);
     int newConnection;
     int read_size;
     struct sockaddr_in receiveAddr;
     Data d = *(Data *)a;
-    int port = d.port;
+    int port = d.port - 1;
+    if(port < 3100)
+        port = 3109;
     int station = d.station;
     char buffer[305];
 
@@ -54,6 +67,7 @@ void *receiver(void *a){
         exit(1);
     }
 
+    pthread_t thread;
     memset(&receiveAddr, 0, sizeof(receiveAddr));
 
     receiveAddr.sin_family = AF_INET;
@@ -68,12 +82,13 @@ void *receiver(void *a){
         printf("Connection failed\n");
         exit(1);
     }
+    d.newConnection = newConnection;
+    pthread_create(&thread, NULL, receiveIndividual, (void *)&d);
+    pthread_join(thread, NULL);
 
-    printf("Connect %d\n", port);
+    printf("R Connect %d\n", port);
 
-    read_size = recv(newConnection, buffer, 305, 0);
-    if(read_size > 0)
-        printf("Recebido da port %d %s\n", port, buffer);
+
 
 
 }
@@ -86,7 +101,8 @@ void *sender(void *a){
     int port = d.port;
     int station = d.station;
 
-    char *buffer = "909099241717 me chama no zap";
+    char buffer[BUFFERSIZE];
+    payload(buffer, station);
 
     if(sock < 0){
         printf("Erro no socket\n");
@@ -103,7 +119,7 @@ void *sender(void *a){
         printf("Connect fail %d\n", port);
         exit(1);
     }
-    printf("Connect %d\n", port);
+    printf("S Connect %d\n", port);
 
     write(sock, buffer, sizeof(buffer) + 50);
 }
