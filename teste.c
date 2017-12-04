@@ -13,6 +13,7 @@
 #include<err.h>
 
 #define PORT 3900
+#define N 5
 #define BUFFERSIZE 20
 
 typedef struct data{
@@ -48,17 +49,15 @@ void *receiveIndividual(void *a){
 
     if(read_size > 0)
         printf("Estação %d recebeu %s\n",station ,buffer);
-
 }
 void *receiver(void *a){
     int sock = socket(AF_INET, SOCK_STREAM, 0);
     int newConnection;
     int read_size;
+    int i = 0;
     struct sockaddr_in receiveAddr;
     Data d = *(Data *)a;
-    int port = d.port - 1;
-    if(port < 3100)
-        port = 3109;
+    int port = d.port;
     int station = d.station;
     char buffer[305];
 
@@ -67,7 +66,7 @@ void *receiver(void *a){
         exit(1);
     }
 
-    pthread_t thread;
+    pthread_t thread[10];
     memset(&receiveAddr, 0, sizeof(receiveAddr));
 
     receiveAddr.sin_family = AF_INET;
@@ -77,14 +76,17 @@ void *receiver(void *a){
     bind(sock, (struct sockaddr*)&receiveAddr, sizeof(receiveAddr));
     listen(sock, 5);
 
-    newConnection = accept(sock, (struct sockaddr*)NULL, NULL);
-    if(newConnection < 0){
-        printf("Connection failed\n");
-        exit(1);
+    while(i < N){
+        newConnection = accept(sock, (struct sockaddr*)NULL, NULL);
+        if(newConnection < 0){
+            printf("Connection failed\n");
+            exit(1);
+        }
+        d.newConnection = newConnection;
+        pthread_create(&thread[i], NULL, receiveIndividual, (void *)&d);
+        pthread_join(thread[i], NULL);
+        i++;
     }
-    d.newConnection = newConnection;
-    pthread_create(&thread, NULL, receiveIndividual, (void *)&d);
-    pthread_join(thread, NULL);
 
     printf("R Connect %d\n", port);
 
@@ -98,7 +100,9 @@ void *sender(void *a){
     int read_size;
 
     Data d = *(Data *)a;
-    int port = d.port;
+    int port = d.port - 1;
+    if(port < PORT)
+        port = PORT + N - 1;
     int station = d.station;
 
     char buffer[BUFFERSIZE];
@@ -120,22 +124,18 @@ void *sender(void *a){
         exit(1);
     }
     printf("S Connect %d\n", port);
-
     write(sock, buffer, sizeof(buffer) + 50);
-}
+    }
 
 int main(){
-    int N = 10, i;
-    pthread_t thread[2];
-    int port1 = 2888, port2 = 3788;
-    int j ;
+    int i, j;
 
     for(i = 0; i < N; i++){
         if(fork() == 0){
+            pthread_t thread[2];
             Data t;
             t.station = i;
-            t.port = i + 3100;
-
+            t.port = i + PORT;
 
             pthread_create(&thread[1], NULL, receiver, (void *)&t);
             pthread_create(&thread[2], NULL, sender, (void *)&t);
@@ -145,6 +145,6 @@ int main(){
             exit(0);
     }
 }
-
+    usleep(2000);
     return 0;
 }
