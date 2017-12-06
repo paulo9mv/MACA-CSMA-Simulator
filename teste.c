@@ -11,10 +11,15 @@
 #include<time.h>
 #include<pthread.h>
 #include<err.h>
+#include<sys/mman.h>
 
-#define PORT 3900
+#define PORT 3990
+#define SEED 999
 #define N 5
-#define BUFFERSIZE 20
+#define BUFSIZE 20
+#define DEFAULT_PORT 3000
+#define DEFAULT_LISTEN 3400
+#define SOCKET_ERROR -1
 
 typedef struct data{
     int station;
@@ -22,23 +27,36 @@ typedef struct data{
     int newConnection;
 }Data;
 
+#define MAX_PIDS 320
+
+volatile pid_t *pids;
+
+
 void *payload(char payload[],int station){
     int i;
-    for(i = 0; i < BUFFERSIZE; i++, station++){
+    for(i = 0; i < BUFSIZE; i++, station++){
         if(station < 10)
             payload[i] = station + '0';
         else if(station < 100){
             payload[i] = (station / 10) + '0';
-            if(i + 1 < BUFFERSIZE)
+            if(i + 1 < BUFSIZE)
                 payload[++i] = (station % 10) + '0';
         }else{
             payload[i] = (station / 100) + '0';
-            if(i + 1 < BUFFERSIZE)
+            if(i + 1 < BUFSIZE)
                 payload[++i] = (station/10)%10 + '0';
-            if(i + 1 < BUFFERSIZE)
+            if(i + 1 < BUFSIZE)
                 payload[++i] = station % 10 + '0';
         }
     }
+}
+int neigh(int a, int neigh[]){
+    int i;
+    for(i = 0; i < 2; i++){
+        if(neigh[i] == a)
+            return 1;
+    }
+    return 0;
 }
 void *receiveIndividual(void *a){
     Data d = *(Data *)a;
@@ -74,7 +92,7 @@ void *receiver(void *a){
     receiveAddr.sin_port = htons(port);
 
     bind(sock, (struct sockaddr*)&receiveAddr, sizeof(receiveAddr));
-    listen(sock, 5);
+    listen(sock, 10);
 
     while(i < N){
         newConnection = accept(sock, (struct sockaddr*)NULL, NULL);
@@ -87,48 +105,107 @@ void *receiver(void *a){
         pthread_join(thread[i], NULL);
         i++;
     }
-
-    printf("R Connect %d\n", port);
-
-
-
-
 }
+
+
+int freeAmbient(int station, int *neighbour){
+    int i;
+
+    for(i = 0; i < 2; i++)
+        if(pids[neighbour[i]] == 1)
+            return 0;
+
+    //nao ha transmissao dos vizinhos, envio OK
+    pids[station] = 1;
+
+    return 1;
+}
+
+
 void *sender(void *a){
-    int sock = socket(AF_INET, SOCK_STREAM, 0);
-    struct sockaddr_in receiveAddr;
-    int read_size;
+    int i;
+    int sock[N];
+    char buffer[BUFSIZE];
+    struct sockaddr_in receiveAddr[N];
+
+    for(i = 0; i < 2; i++){
+        sock[i] = socket(AF_INET, SOCK_STREAM, 0);
+        if(sock[i] < 0){
+            printf("Socket error\n");
+            exit(1);
+        }
+    }
+
 
     Data d = *(Data *)a;
-    int port = d.port - 1;
-    if(port < PORT)
-        port = PORT + N - 1;
+    int port[2];
     int station = d.station;
 
-    char buffer[BUFFERSIZE];
+    int neighbours[2];
+
+    if(station - 1 < 0){
+        neighbours[0] = N - 1;
+        port[0] = N - 1 + PORT;
+    }
+    else{
+        neighbours[0] = station - 1;
+        port[0] = station - 1 + PORT;
+    }
+    if(station + 1 >= N){
+        neighbours[1] = 0;
+        port[1] = PORT;
+    }
+    else{
+        neighbours[1] = station + 1;
+        port[1] = station + 1 + PORT;
+    }
+
+    for(i = 0; i< 2; i++){
+        memset(&receiveAddr[i], 0, sizeof(receiveAddr));
+
+        receiveAddr[i].sin_family = AF_INET;
+        receiveAddr[i].sin_addr.s_addr = htonl(INADDR_ANY);
+        receiveAddr[i].sin_port = htons(port[i]);
+    }
+
     payload(buffer, station);
 
-    if(sock < 0){
-        printf("Erro no socket\n");
-        exit(1);
+    while(freeAmbient(station, neighbours) == 0){
+        usleep(1000 + (rand()%100000));
     }
 
-    memset(&receiveAddr, 0, sizeof(receiveAddr));
+    for(i = 0; i < 2; i++){
+        //Faz uma conexao e envia para cada vizinho
+        if(connect(sock[i], (struct sockaddr*)&receiveAddr[i], sizeof(receiveAddr)) < 0){
+            printf("Connect fail %d\n", port[i]);
+            exit(1);
+        }
 
-    receiveAddr.sin_family = AF_INET;
-    receiveAddr.sin_addr.s_addr = htonl(INADDR_ANY);
-    receiveAddr.sin_port = htons(port);
+        if(write(sock[i], buffer, sizeof(buffer) + 90) == -1)
+            printf("Erro\n");
 
-    if(connect(sock, (struct sockaddr*)&receiveAddr, sizeof(receiveAddr)) < 0){
-        printf("Connect fail %d\n", port);
-        exit(1);
+        close(sock[i]);
     }
-    printf("S Connect %d\n", port);
-    write(sock, buffer, sizeof(buffer) + 50);
+
+    //Libera dizendo que já liberou o canal
+    pids[station] = 0;
     }
 
 int main(){
     int i, j;
+    srand(SEED);
+    // Map space for shared array
+ pids = mmap(0, MAX_PIDS*sizeof(pid_t), PROT_READ|PROT_WRITE,
+             MAP_SHARED | MAP_ANONYMOUS, -1, 0);
+ if (!pids) {
+   perror("mmap failed");
+   exit(1);
+ }
+ memset((void *)pids, 0, MAX_PIDS*sizeof(pid_t));
+
+ for(i = 0; i < N; i++){
+     pids[i] = 0;
+ }
 
     for(i = 0; i < N; i++){
         if(fork() == 0){
@@ -136,6 +213,8 @@ int main(){
             Data t;
             t.station = i;
             t.port = i + PORT;
+
+            sleep(1);
 
             pthread_create(&thread[1], NULL, receiver, (void *)&t);
             pthread_create(&thread[2], NULL, sender, (void *)&t);
@@ -145,6 +224,6 @@ int main(){
             exit(0);
     }
 }
-    usleep(2000);
+    sleep(3);
     return 0;
 }
