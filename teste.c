@@ -12,14 +12,19 @@
 #include<pthread.h>
 #include<err.h>
 #include<sys/mman.h>
+#include<net/ethernet.h>
 
 #define PORT 3990
 #define SEED 999
 #define N 5
-#define BUFSIZE 20
+#define BUFSIZE 200
+#define BUF_SIZ 216
+
 #define DEFAULT_PORT 3000
 #define DEFAULT_LISTEN 3400
 #define SOCKET_ERROR -1
+
+#define MAX_PIDS 101
 
 typedef struct data{
     int station;
@@ -27,14 +32,25 @@ typedef struct data{
     int newConnection;
 }Data;
 
-#define MAX_PIDS 320
-
 volatile pid_t *pids;
-
 
 void *payload(char payload[],int station){
     int i;
-    for(i = 0; i < BUFSIZE; i++, station++){
+
+    char macsrc[50];
+    char macdest[50];
+
+    struct ether_header *eh = (struct ether_header *) payload;
+
+    /* Construct the Ethernet header */
+    memset(payload, 0, BUF_SIZ);
+    /* Ethernet header */       
+    memcpy(eh->ether_shost, macsrc, sizeof(struct ether_header));
+    memcpy(eh->ether_dhost, macdest, sizeof(struct ether_header));
+    /* Ethertype field */
+    eh->ether_type = htons(ETH_P_IP);
+
+    for(i = sizeof(struct ether_header); i < BUFSIZE + sizeof(struct ether_header); i++, station++){
         if(station < 10)
             payload[i] = station + '0';
         else if(station < 100){
@@ -120,7 +136,12 @@ int freeAmbient(int station, int *neighbour){
 
     return 1;
 }
-
+int treesholder(int a){
+    int b = rand()%100;
+    if(b <= a)
+        return 0;
+    return 1;
+}
 
 void *sender(void *a){
     int i;
@@ -140,6 +161,7 @@ void *sender(void *a){
     Data d = *(Data *)a;
     int port[2];
     int station = d.station;
+    int thresoulder = 0;
 
     int neighbours[2];
 
@@ -181,15 +203,20 @@ void *sender(void *a){
             exit(1);
         }
 
-        if(write(sock[i], buffer, sizeof(buffer) + 90) == -1)
-            printf("Erro\n");
+        while(thresoulder == 0){
+            thresoulder = treesholder(10);
+            if(thresoulder == 1)
+            if(write(sock[i], buffer, sizeof(buffer) + 90) == -1)
+                printf("Erro\n");
+        }
 
+        thresoulder = 0;
         close(sock[i]);
     }
 
     //Libera dizendo que já liberou o canal
     pids[station] = 0;
-    }
+}
 
 int main(){
     int i, j;
@@ -207,12 +234,14 @@ int main(){
      pids[i] = 0;
  }
 
+    int aleatorio = rand()%10;
+
     for(i = 0; i < N; i++){
         if(fork() == 0){
             pthread_t thread[2];
             Data t;
             t.station = i;
-            t.port = i + PORT;
+            t.port = i + PORT + aleatorio;
 
             sleep(1);
 
