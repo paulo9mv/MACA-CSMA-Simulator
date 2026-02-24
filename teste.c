@@ -1,5 +1,4 @@
 #include<stdio.h>
-#include<stdio.h>
 #include<stdlib.h>
 #include<sys/socket.h>
 #include<netinet/in.h>
@@ -34,8 +33,9 @@ typedef struct data{
 
 volatile pid_t *pids;
 
-void *payload(char payload[],int station){
+void payload(char payload[],int station){
     int i;
+    const int hdrlen = (int)sizeof(struct ether_header);
 
     char macsrc[50];
     char macdest[50];
@@ -45,23 +45,23 @@ void *payload(char payload[],int station){
     /* Construct the Ethernet header */
     memset(payload, 0, BUF_SIZ);
     /* Ethernet header */       
-    memcpy(eh->ether_shost, macsrc, sizeof(struct ether_header));
-    memcpy(eh->ether_dhost, macdest, sizeof(struct ether_header));
+    memcpy(eh->ether_shost, macsrc, ETH_ALEN);
+    memcpy(eh->ether_dhost, macdest, ETH_ALEN);
     /* Ethertype field */
     eh->ether_type = htons(ETH_P_IP);
 
-    for(i = sizeof(struct ether_header); i < BUFSIZE + sizeof(struct ether_header); i++, station++){
+    for(i = hdrlen; i < BUFSIZE + hdrlen; i++, station++){
         if(station < 10)
             payload[i] = station + '0';
         else if(station < 100){
             payload[i] = (station / 10) + '0';
-            if(i + 1 < BUFSIZE)
+            if(i + 1 < BUFSIZE + hdrlen)
                 payload[++i] = (station % 10) + '0';
         }else{
             payload[i] = (station / 100) + '0';
-            if(i + 1 < BUFSIZE)
+            if(i + 1 < BUFSIZE + hdrlen)
                 payload[++i] = (station/10)%10 + '0';
-            if(i + 1 < BUFSIZE)
+            if(i + 1 < BUFSIZE + hdrlen)
                 payload[++i] = station % 10 + '0';
         }
     }
@@ -206,7 +206,7 @@ void *sender(void *a){
         while(thresoulder == 0){
             thresoulder = treesholder(10);
             if(thresoulder == 1)
-            if(write(sock[i], buffer, sizeof(buffer) + 90) == -1)
+            if(write(sock[i], buffer, sizeof(buffer)) == -1)
                 printf("Erro\n");
         }
 
@@ -245,11 +245,11 @@ int main(){
 
             sleep(1);
 
-            pthread_create(&thread[1], NULL, receiver, (void *)&t);
-            pthread_create(&thread[2], NULL, sender, (void *)&t);
+            pthread_create(&thread[0], NULL, receiver, (void *)&t);
+            pthread_create(&thread[1], NULL, sender, (void *)&t);
 
+            pthread_join(thread[0], NULL);
             pthread_join(thread[1], NULL);
-            pthread_join(thread[2], NULL);
             exit(0);
     }
 }
