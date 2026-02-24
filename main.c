@@ -1,5 +1,4 @@
 #include<stdio.h>
-#include<stdio.h>
 #include<stdlib.h>
 #include<sys/socket.h>
 #include<netinet/in.h>
@@ -53,6 +52,7 @@ void *new_conection(void *a){
 	}
 
 	close(newsock);
+	return NULL;
 }
 void *receive(){
     int listenfd = 0, connfd = 0;

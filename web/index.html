@@ -1,0 +1,836 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Simulador MACA &amp; CSMA</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: #0f172a;
+      color: #e2e8f0;
+      min-height: 100vh;
+    }
+
+    /* ── Header ── */
+    header {
+      background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+      padding: 22px 32px;
+      border-bottom: 1px solid #334155;
+      text-align: center;
+    }
+    header h1 { font-size: 1.9rem; color: #38bdf8; letter-spacing: -0.5px; }
+    header p  { color: #94a3b8; margin-top: 6px; font-size: 0.92rem; }
+
+    /* ── Tab navigation ── */
+    nav {
+      display: flex;
+      justify-content: center;
+      gap: 12px;
+      padding: 18px;
+      background: #1e293b;
+      border-bottom: 1px solid #334155;
+    }
+    .tab-btn {
+      padding: 10px 30px;
+      border-radius: 8px;
+      border: 2px solid #334155;
+      background: transparent;
+      color: #94a3b8;
+      font-size: 0.97rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .tab-btn:hover { border-color: #38bdf8; color: #38bdf8; }
+    .tab-btn.active { background: #38bdf8; border-color: #38bdf8; color: #0f172a; }
+
+    /* ── Layout ── */
+    .container { max-width: 1200px; margin: 24px auto; padding: 0 16px 40px; }
+    .panel { display: none; }
+    .panel.active { display: block; }
+
+    .description {
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 12px;
+      padding: 16px 24px;
+      margin-bottom: 18px;
+    }
+    .description h2 { color: #38bdf8; margin-bottom: 7px; font-size: 1.05rem; }
+    .description p  { color: #94a3b8; font-size: 0.87rem; line-height: 1.65; }
+
+    .sim-layout {
+      display: grid;
+      grid-template-columns: 1fr 290px;
+      gap: 18px;
+      align-items: start;
+    }
+    @media (max-width: 800px) { .sim-layout { grid-template-columns: 1fr; } }
+
+    .canvas-wrap {
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 12px;
+      padding: 14px;
+      overflow: hidden;
+    }
+    canvas {
+      display: block;
+      width: 100%;
+      border-radius: 8px;
+      background: #0d1117;
+    }
+
+    .sidebar { display: flex; flex-direction: column; gap: 14px; }
+
+    .card {
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 12px;
+      padding: 14px 16px;
+    }
+    .card h3 {
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 1.2px;
+      color: #64748b;
+      margin-bottom: 11px;
+    }
+
+    /* ── Buttons ── */
+    .btn-row { display: flex; flex-wrap: wrap; gap: 7px; }
+    .btn {
+      padding: 7px 13px;
+      border: none;
+      border-radius: 6px;
+      font-size: 0.82rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity 0.18s;
+    }
+    .btn:hover { opacity: 0.82; }
+    .btn-start  { background: #22c55e; color: #0f172a; }
+    .btn-pause  { background: #f59e0b; color: #0f172a; }
+    .btn-step   { background: #38bdf8; color: #0f172a; }
+    .btn-reset  { background: #6b7280; color: #fff; }
+
+    .speed-wrap { margin-top: 11px; }
+    .speed-wrap label { font-size: 0.78rem; color: #94a3b8; }
+    input[type=range] { width: 100%; margin-top: 4px; accent-color: #38bdf8; }
+
+    /* ── Legend ── */
+    .legend-item { display: flex; align-items: center; gap: 9px; margin-bottom: 6px; font-size: 0.8rem; color: #cbd5e1; }
+    .dot { width: 13px; height: 13px; border-radius: 50%; flex-shrink: 0; }
+
+    /* ── Stats ── */
+    .stat-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 5px 0;
+      font-size: 0.8rem;
+      border-bottom: 1px solid #0f172a;
+      color: #94a3b8;
+    }
+    .stat-val { color: #38bdf8; font-weight: 700; }
+
+    /* ── Log ── */
+    .log-body {
+      height: 175px;
+      overflow-y: auto;
+      font-size: 0.76rem;
+      font-family: monospace;
+    }
+    .log-body::-webkit-scrollbar { width: 4px; }
+    .log-body::-webkit-scrollbar-thumb { background: #334155; border-radius: 2px; }
+    .log-line { padding: 3px 1px; border-bottom: 1px solid #0f172a; }
+    .log-line .t { color: #475569; margin-right: 5px; }
+    .ev-collision { color: #f87171; }
+    .ev-success   { color: #4ade80; }
+    .ev-rts       { color: #60a5fa; }
+    .ev-cts       { color: #a78bfa; }
+    .ev-data      { color: #fbbf24; }
+    .ev-ack       { color: #34d399; }
+    .ev-nav       { color: #f472b6; }
+    .ev-info      { color: #94a3b8; }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>🌐 Simulador MACA &amp; CSMA</h1>
+  <p>Visualize de forma interativa o funcionamento dos protocolos de controle de acesso ao meio sem fio</p>
+</header>
+
+<nav>
+  <button class="tab-btn active" onclick="showTab('csma', this)">CSMA/CD</button>
+  <button class="tab-btn"        onclick="showTab('maca', this)">MACA</button>
+</nav>
+
+<div class="container">
+
+  <!-- ══════════════ CSMA PANEL ══════════════ -->
+  <div id="csma" class="panel active">
+    <div class="description">
+      <h2>CSMA/CD — Carrier Sense Multiple Access / Collision Detection</h2>
+      <p>Cada estação <strong>escuta o canal</strong> antes de transmitir. Se o canal estiver livre, ela transmite.
+         Se duas estações transmitirem ao mesmo tempo, ocorre uma <strong>colisão</strong>: ambas param e aguardam
+         um tempo aleatório (<em>backoff exponencial binário</em>) antes de tentar novamente.</p>
+    </div>
+    <div class="sim-layout">
+      <div class="canvas-wrap">
+        <canvas id="csma-canvas" height="380"></canvas>
+      </div>
+      <div class="sidebar">
+        <div class="card">
+          <h3>Controles</h3>
+          <div class="btn-row">
+            <button class="btn btn-start" onclick="csmaStart()">▶ Iniciar</button>
+            <button class="btn btn-pause" onclick="csmaPause()">⏸ Pausar</button>
+            <button class="btn btn-step"  onclick="csmaStep()">⏭ Passo</button>
+            <button class="btn btn-reset" onclick="csmaReset()">↺ Reiniciar</button>
+          </div>
+          <div class="speed-wrap">
+            <label>Velocidade: <span id="csma-spd-lbl">normal</span></label>
+            <input type="range" id="csma-spd" min="1" max="5" value="3"
+                   oninput="csmaSetSpeed(this.value)">
+          </div>
+        </div>
+        <div class="card">
+          <h3>Legenda</h3>
+          <div class="legend-item"><div class="dot" style="background:#4ade80"></div>Ocioso</div>
+          <div class="legend-item"><div class="dot" style="background:#fbbf24"></div>Sensoriando canal</div>
+          <div class="legend-item"><div class="dot" style="background:#38bdf8"></div>Transmitindo</div>
+          <div class="legend-item"><div class="dot" style="background:#818cf8"></div>Backoff (aguardando)</div>
+          <div class="legend-item"><div class="dot" style="background:#f87171"></div>Colisão detectada</div>
+          <div class="legend-item"><div class="dot" style="background:#34d399"></div>Transmissão OK</div>
+        </div>
+        <div class="card">
+          <h3>Estatísticas</h3>
+          <div class="stat-row"><span>Tempo (ticks)</span><span class="stat-val" id="csma-t">0</span></div>
+          <div class="stat-row"><span>Transmissões</span><span class="stat-val" id="csma-tx">0</span></div>
+          <div class="stat-row"><span>Colisões</span><span class="stat-val" id="csma-col">0</span></div>
+          <div class="stat-row"><span>Eficiência</span><span class="stat-val" id="csma-eff">—</span></div>
+        </div>
+        <div class="card">
+          <h3>Log de Eventos</h3>
+          <div class="log-body" id="csma-log"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════ MACA PANEL ══════════════ -->
+  <div id="maca" class="panel">
+    <div class="description">
+      <h2>MACA — Multiple Access with Collision Avoidance</h2>
+      <p>O MACA resolve o <strong>problema do terminal oculto</strong>. Antes de enviar dados, o emissor envia
+         um <strong>RTS</strong> (Request to Send). O receptor responde com <strong>CTS</strong> (Clear to Send).
+         Estações que ouvem o CTS entram em modo <strong>NAV</strong> (Network Allocation Vector) e adiam suas
+         transmissões, evitando colisões.</p>
+    </div>
+    <div class="sim-layout">
+      <div class="canvas-wrap">
+        <canvas id="maca-canvas" height="430"></canvas>
+      </div>
+      <div class="sidebar">
+        <div class="card">
+          <h3>Controles</h3>
+          <div class="btn-row">
+            <button class="btn btn-start" onclick="macaStart()">▶ Iniciar</button>
+            <button class="btn btn-pause" onclick="macaPause()">⏸ Pausar</button>
+            <button class="btn btn-step"  onclick="macaNextStep()">⏭ Passo</button>
+            <button class="btn btn-reset" onclick="macaReset()">↺ Reiniciar</button>
+          </div>
+          <div class="speed-wrap">
+            <label>Velocidade: <span id="maca-spd-lbl">normal</span></label>
+            <input type="range" id="maca-spd" min="1" max="5" value="3"
+                   oninput="macaSetSpeed(this.value)">
+          </div>
+        </div>
+        <div class="card">
+          <h3>Legenda</h3>
+          <div class="legend-item"><div class="dot" style="background:#60a5fa"></div>RTS (Request to Send)</div>
+          <div class="legend-item"><div class="dot" style="background:#a78bfa"></div>CTS (Clear to Send)</div>
+          <div class="legend-item"><div class="dot" style="background:#fbbf24"></div>DATA (Dados)</div>
+          <div class="legend-item"><div class="dot" style="background:#34d399"></div>ACK (Confirmação)</div>
+          <div class="legend-item"><div class="dot" style="background:#f472b6"></div>NAV (Adiamento)</div>
+          <div class="legend-item"><div class="dot" style="background:#4ade80"></div>Ocioso / Concluído</div>
+        </div>
+        <div class="card">
+          <h3>Estatísticas</h3>
+          <div class="stat-row"><span>Passo atual</span><span class="stat-val" id="maca-step-n">0</span></div>
+          <div class="stat-row"><span>RTS enviados</span><span class="stat-val" id="maca-rts">0</span></div>
+          <div class="stat-row"><span>CTS enviados</span><span class="stat-val" id="maca-cts">0</span></div>
+          <div class="stat-row"><span>Pacotes entregues</span><span class="stat-val" id="maca-ok">0</span></div>
+        </div>
+        <div class="card">
+          <h3>Log de Eventos</h3>
+          <div class="log-body" id="maca-log"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- .container -->
+
+<script>
+/* ================================================================
+   UTILITIES
+   ================================================================ */
+function showTab(id, btn) {
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById(id).classList.add('active');
+  if (id === 'maca' && !macaReady) initMACA();
+}
+
+function addLog(sid, msg, cls) {
+  const el = document.getElementById(sid + '-log');
+  if (!el) return;
+  const d = document.createElement('div');
+  d.className = 'log-line ev-' + (cls || 'info');
+  const tick = sid === 'csma' ? csmaTime : macaCurStep;
+  d.innerHTML = '<span class="t">[' + tick + ']</span>' + msg;
+  el.appendChild(d);
+  el.scrollTop = el.scrollHeight;
+  while (el.children.length > 120) el.removeChild(el.firstChild);
+}
+
+function clearLog(sid) {
+  const el = document.getElementById(sid + '-log');
+  if (el) el.innerHTML = '';
+}
+
+/* ================================================================
+   CSMA / CD SIMULATION
+   ================================================================ */
+const CSMA_BUS_Y   = 295;
+const CSMA_NODE_Y  = 105;
+const CSMA_N       = 5;
+const CSMA_TX_TICK = 22;
+const CSMA_SEN_TK  = 2;
+
+const C_CLR = {
+  idle: '#4ade80', sensing: '#fbbf24', transmitting: '#38bdf8',
+  backoff: '#818cf8', collision: '#f87171', success: '#34d399'
+};
+const C_LBL = {
+  idle: 'Ocioso', sensing: 'Sensoriando', transmitting: 'Transmitindo',
+  backoff: 'Backoff', collision: 'Colisão!', success: 'OK ✓'
+};
+
+let csmaCtx, csmaW, csmaH;
+let csmaTime = 0, csmaTxCnt = 0, csmaColCnt = 0;
+let csmaRunning = false, csmaItvl = null, csmaTickMs = 150;
+let csmaStations = [], csmaSignals = [];
+
+(function initCSMA() {
+  const canvas = document.getElementById('csma-canvas');
+  csmaW = canvas.parentElement.clientWidth - 28;
+  csmaH = 380;
+  canvas.width = csmaW; canvas.height = csmaH;
+  csmaCtx = canvas.getContext('2d');
+  csmaReset();
+})();
+
+function csmaReset() {
+  csmaRunning = false; clearInterval(csmaItvl);
+  csmaTime = 0; csmaTxCnt = 0; csmaColCnt = 0;
+  csmaSignals = []; csmaStations = [];
+  clearLog('csma');
+  for (let i = 0; i < CSMA_N; i++) {
+    csmaStations.push({
+      id: i, x: csmaW * (i + 1) / (CSMA_N + 1),
+      state: 'idle', backoff: 0, txTimer: 0, senseTimer: 0,
+      sendTimer: i * 8 + 6, attempt: 0
+    });
+  }
+  addLog('csma', 'Simulação CSMA/CD pronta. Clique em Iniciar.', 'info');
+  updateCSMAStats(); drawCSMA();
+}
+
+function csmaStart() {
+  if (csmaRunning) return;
+  csmaRunning = true;
+  csmaItvl = setInterval(csmaTick, csmaTickMs);
+}
+function csmaPause() { csmaRunning = false; clearInterval(csmaItvl); }
+function csmaStep()  { csmaTick(); }
+
+function csmaSetSpeed(v) {
+  const labels  = ['muito lento', 'lento', 'normal', 'rápido', 'muito rápido'];
+  const delays  = [500, 280, 150, 70, 25];
+  csmaTickMs = delays[v - 1];
+  document.getElementById('csma-spd-lbl').textContent = labels[v - 1];
+  if (csmaRunning) { clearInterval(csmaItvl); csmaItvl = setInterval(csmaTick, csmaTickMs); }
+}
+
+function csmaTick() {
+  csmaTime++;
+
+  // Propagate signals
+  for (let i = csmaSignals.length - 1; i >= 0; i--) {
+    const s = csmaSignals[i];
+    s.left  = Math.max(0,      s.left  - 11);
+    s.right = Math.min(csmaW,  s.right + 11);
+    s.life--;
+    if (s.life <= 0) csmaSignals.splice(i, 1);
+  }
+
+  // Detect simultaneous transmissions → collision
+  const txing = csmaStations.filter(s => s.state === 'transmitting');
+  if (txing.length > 1) {
+    const ids = txing.map(s => 'E' + s.id).join(' e ');
+    addLog('csma', '💥 COLISÃO entre ' + ids + '!', 'collision');
+    csmaColCnt++;
+    txing.forEach(s => {
+      s.state = 'collision';
+      s.attempt = Math.min(s.attempt + 1, 8);
+      csmaSignals = csmaSignals.filter(sg => sg.srcId !== s.id);
+    });
+  }
+
+  // State machine per station
+  csmaStations.forEach(s => {
+    if (s.state === 'idle') {
+      if (--s.sendTimer <= 0) {
+        s.state = 'sensing'; s.senseTimer = CSMA_SEN_TK;
+        addLog('csma', 'E' + s.id + ': quer transmitir — sensoriando canal…', 'info');
+      }
+    } else if (s.state === 'sensing') {
+      if (--s.senseTimer <= 0) {
+        const busy = csmaSignals.some(sg => sg.left <= s.x + 4 && sg.right >= s.x - 4);
+        if (busy) {
+          s.state = 'backoff';
+          s.backoff = Math.floor(Math.random() * 8) + 3;
+          addLog('csma', 'E' + s.id + ': canal ocupado → backoff=' + s.backoff, 'info');
+        } else {
+          s.state = 'transmitting'; s.txTimer = CSMA_TX_TICK;
+          csmaTxCnt++;
+          const sigColors = ['#ef4444', '#22c55e', '#3b82f6', '#a855f7', '#f97316'];
+          csmaSignals.push({ srcId: s.id, left: s.x, right: s.x,
+            life: CSMA_TX_TICK + 12, color: sigColors[s.id % sigColors.length] });
+          addLog('csma', 'E' + s.id + ': canal livre → transmitindo…', 'success');
+        }
+      }
+    } else if (s.state === 'backoff') {
+      if (--s.backoff <= 0) {
+        s.state = 'sensing'; s.senseTimer = CSMA_SEN_TK;
+        addLog('csma', 'E' + s.id + ': backoff expirou — sensoriando…', 'info');
+      }
+    } else if (s.state === 'transmitting') {
+      if (--s.txTimer <= 0) {
+        s.state = 'success'; s.attempt = 0;
+        addLog('csma', 'E' + s.id + ': ✓ transmissão concluída!', 'success');
+        const sid = s.id;
+        setTimeout(() => {
+          const st = csmaStations[sid];
+          if (st && st.state === 'success') {
+            st.state = 'idle';
+            st.sendTimer = Math.floor(Math.random() * 35) + 18;
+          }
+        }, csmaTickMs * 7);
+      }
+    } else if (s.state === 'collision') {
+      const maxB = Math.pow(2, s.attempt) * 5;
+      s.backoff = Math.floor(Math.random() * maxB) + 2;
+      s.state = 'backoff';
+      addLog('csma', 'E' + s.id + ': backoff pós-colisão=' + s.backoff, 'info');
+    }
+  });
+
+  updateCSMAStats(); drawCSMA();
+}
+
+function drawCSMA() {
+  if (!csmaCtx) return;
+  const ctx = csmaCtx, W = csmaW, H = csmaH;
+  ctx.clearRect(0, 0, W, H);
+  ctx.fillStyle = '#0d1117'; ctx.fillRect(0, 0, W, H);
+
+  // Bus background
+  ctx.strokeStyle = '#1e293b'; ctx.lineWidth = 14; ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(30, CSMA_BUS_Y); ctx.lineTo(W - 30, CSMA_BUS_Y); ctx.stroke();
+  ctx.strokeStyle = '#334155'; ctx.lineWidth = 4;
+  ctx.beginPath(); ctx.moveTo(30, CSMA_BUS_Y); ctx.lineTo(W - 30, CSMA_BUS_Y); ctx.stroke();
+
+  // Active signals
+  csmaSignals.forEach(sig => {
+    const grd = ctx.createLinearGradient(sig.left, 0, sig.right, 0);
+    grd.addColorStop(0, 'transparent');
+    grd.addColorStop(0.25, sig.color);
+    grd.addColorStop(0.5,  sig.color);
+    grd.addColorStop(0.75, sig.color);
+    grd.addColorStop(1, 'transparent');
+    ctx.strokeStyle = grd; ctx.lineWidth = 9;
+    ctx.beginPath(); ctx.moveTo(sig.left, CSMA_BUS_Y); ctx.lineTo(sig.right, CSMA_BUS_Y); ctx.stroke();
+  });
+
+  // Bus label
+  ctx.fillStyle = '#334155'; ctx.font = '11px monospace'; ctx.textAlign = 'center';
+  ctx.fillText('MEIO COMPARTILHADO (BARRAMENTO)', W / 2, CSMA_BUS_Y + 24);
+
+  // Channel status
+  const busy = csmaSignals.length > 0;
+  ctx.fillStyle = busy ? '#f87171' : '#4ade80';
+  ctx.font = '12px sans-serif'; ctx.textAlign = 'right';
+  ctx.fillText(busy ? '⬤ Canal Ocupado' : '○ Canal Livre', W - 12, 18);
+
+  // Time
+  ctx.fillStyle = '#475569'; ctx.textAlign = 'left';
+  ctx.fillText('t = ' + csmaTime, 12, 18);
+
+  // Stations
+  csmaStations.forEach(s => {
+    const x = s.x, y = CSMA_NODE_Y;
+    const isTx = s.state === 'transmitting';
+
+    // Connector line
+    ctx.strokeStyle = isTx ? C_CLR.transmitting + '60' : '#1e293b';
+    ctx.lineWidth = isTx ? 3 : 2;
+    ctx.setLineDash(isTx ? [] : [4, 4]);
+    ctx.beginPath(); ctx.moveTo(x, y + 28); ctx.lineTo(x, CSMA_BUS_Y - 4); ctx.stroke();
+    ctx.setLineDash([]);
+
+    if (s.state === 'transmitting' || s.state === 'collision') {
+      const grd2 = ctx.createRadialGradient(x, y, 22, x, y, 56);
+      grd2.addColorStop(0, C_CLR[s.state]);
+      grd2.addColorStop(1, 'transparent');
+      ctx.globalAlpha = 0.22;
+      ctx.fillStyle = grd2;
+      ctx.beginPath(); ctx.arc(x, y, 56, 0, Math.PI * 2); ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+
+    // Circle
+    ctx.beginPath(); ctx.arc(x, y, 26, 0, Math.PI * 2);
+    ctx.fillStyle = C_CLR[s.state]; ctx.fill();
+    ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.stroke();
+
+    // ID
+    ctx.fillStyle = '#0f172a'; ctx.font = 'bold 14px monospace';
+    ctx.textAlign = 'center'; ctx.fillText('E' + s.id, x, y + 5);
+
+    // State label
+    ctx.fillStyle = '#94a3b8'; ctx.font = '10px sans-serif';
+    ctx.fillText(C_LBL[s.state], x, y + 48);
+
+    // TX progress bar
+    if (s.state === 'transmitting') {
+      const p = 1 - s.txTimer / CSMA_TX_TICK;
+      ctx.fillStyle = '#0f172a'; ctx.fillRect(x - 22, y - 48, 44, 7);
+      ctx.fillStyle = '#38bdf8'; ctx.fillRect(x - 22, y - 48, 44 * p, 7);
+      ctx.strokeStyle = '#334155'; ctx.lineWidth = 1; ctx.strokeRect(x - 22, y - 48, 44, 7);
+    }
+    // Backoff bar
+    if (s.state === 'backoff' && s.attempt > 0) {
+      const maxB = Math.pow(2, s.attempt) * 5;
+      const p = s.backoff / maxB;
+      ctx.fillStyle = '#0f172a'; ctx.fillRect(x - 22, y - 48, 44, 7);
+      ctx.fillStyle = '#818cf8'; ctx.fillRect(x - 22, y - 48, 44 * p, 7);
+      ctx.strokeStyle = '#334155'; ctx.lineWidth = 1; ctx.strokeRect(x - 22, y - 48, 44, 7);
+    }
+    // Wants-to-send icon
+    if (s.state === 'sensing' || (s.state === 'idle' && s.sendTimer <= 3)) {
+      ctx.font = '14px serif'; ctx.fillStyle = '#fbbf24';
+      ctx.fillText('📦', x - 7, y - 35);
+    }
+  });
+
+  // Footer hint
+  ctx.fillStyle = '#334155'; ctx.font = '10px sans-serif'; ctx.textAlign = 'center';
+  ctx.fillText('Colisões ativam o algoritmo de backoff exponencial binário', W / 2, H - 10);
+}
+
+function updateCSMAStats() {
+  document.getElementById('csma-t').textContent   = csmaTime;
+  document.getElementById('csma-tx').textContent  = csmaTxCnt;
+  document.getElementById('csma-col').textContent = csmaColCnt;
+  const eff = csmaTxCnt > 0 ? Math.round((1 - csmaColCnt / csmaTxCnt) * 100) + '%' : '—';
+  document.getElementById('csma-eff').textContent = eff;
+}
+
+/* ================================================================
+   MACA SIMULATION (scripted scenario)
+   ================================================================ */
+const M_CLR = {
+  idle: '#4ade80', want: '#fbbf24', rts: '#60a5fa',
+  cts: '#a78bfa', data: '#fbbf24', ack: '#34d399',
+  nav: '#f472b6', success: '#34d399', wait: '#94a3b8'
+};
+const M_LBL = {
+  idle: 'Ocioso', want: 'Quer enviar', rts: 'Enviou RTS',
+  cts: 'Enviou CTS', data: 'Enviando DATA', ack: 'Enviou ACK',
+  nav: 'NAV (aguardando)', success: 'Sucesso ✓', wait: 'Aguardando'
+};
+
+const MACA_STEPS = [
+  { desc: 'A e C desejam transmitir dados para B (problema do terminal oculto)',
+    fn: (n) => { n[0].state = 'want'; n[2].state = 'want'; } },
+  { desc: 'A envia RTS para B: "Posso enviar X bytes?"',
+    fn: (n) => { n[0].state = 'rts'; emitMsg(n[0], n[1], 'RTS', '#60a5fa'); },
+    logCls: 'rts', rts: 1 },
+  { desc: 'C não ouve o RTS de A — A e C são terminais ocultos entre si!',
+    fn: () => {} },
+  { desc: 'B recebe RTS de A e responde com CTS (ouvido por A e C)',
+    fn: (n) => { n[1].state = 'cts'; emitMsg(n[1], n[0], 'CTS', '#a78bfa'); emitMsg(n[1], n[2], 'CTS', '#a78bfa'); },
+    logCls: 'cts', cts: 1 },
+  { desc: 'C ouve o CTS de B e entra em modo NAV — vai aguardar',
+    fn: (n) => { n[2].state = 'nav'; },
+    logCls: 'nav' },
+  { desc: 'A recebe CTS de B e começa a enviar DATA',
+    fn: (n) => { n[0].state = 'data'; emitMsg(n[0], n[1], 'DATA', '#fbbf24'); },
+    logCls: 'data' },
+  { desc: 'B recebe DATA de A e envia ACK de confirmação',
+    fn: (n) => { n[1].state = 'ack'; emitMsg(n[1], n[0], 'ACK', '#34d399'); },
+    logCls: 'ack' },
+  { desc: 'A recebe ACK — transmissão de A→B concluída com sucesso! ✓',
+    fn: (n) => { n[0].state = 'success'; n[1].state = 'idle'; },
+    logCls: 'success', ok: 1 },
+  { desc: 'NAV de C expira — agora C pode tentar transmitir para B',
+    fn: (n) => { n[2].state = 'want'; n[0].state = 'idle'; } },
+  { desc: 'C envia RTS para B',
+    fn: (n) => { n[2].state = 'rts'; emitMsg(n[2], n[1], 'RTS', '#60a5fa'); },
+    logCls: 'rts', rts: 1 },
+  { desc: 'B recebe RTS de C e responde com CTS para C (A também ouve)',
+    fn: (n) => { n[1].state = 'cts'; emitMsg(n[1], n[2], 'CTS', '#a78bfa'); emitMsg(n[1], n[0], 'CTS', '#a78bfa'); n[0].state = 'nav'; },
+    logCls: 'cts', cts: 1 },
+  { desc: 'C recebe CTS e envia DATA para B',
+    fn: (n) => { n[2].state = 'data'; emitMsg(n[2], n[1], 'DATA', '#fbbf24'); },
+    logCls: 'data' },
+  { desc: 'B recebe DATA de C e envia ACK — transmissão de C→B concluída! ✓',
+    fn: (n) => { n[1].state = 'ack'; emitMsg(n[1], n[2], 'ACK', '#34d399'); n[2].state = 'success'; n[0].state = 'idle'; },
+    logCls: 'ack', ok: 1 },
+  { desc: '🎉 Simulação MACA completa! Nenhuma colisão graças ao mecanismo RTS/CTS.',
+    fn: (n) => { n[1].state = 'idle'; },
+    logCls: 'success' }
+];
+
+let macaCtx, macaW, macaH, macaReady = false;
+let macaCurStep = 0, macaRtsCnt = 0, macaCtsCnt = 0, macaOkCnt = 0;
+let macaRunning = false, macaItvl = null, macaStepMs = 1000;
+let macaNodes = [], macaAnims = [];
+
+function initMACA() {
+  const canvas = document.getElementById('maca-canvas');
+  macaW = canvas.parentElement.clientWidth - 28;
+  macaH = 430;
+  canvas.width = macaW; canvas.height = macaH;
+  macaCtx = canvas.getContext('2d');
+  macaReady = true;
+  macaReset();
+}
+
+function macaReset() {
+  macaRunning = false; clearInterval(macaItvl);
+  macaCurStep = 0; macaRtsCnt = 0; macaCtsCnt = 0; macaOkCnt = 0;
+  macaAnims = []; clearLog('maca');
+
+  const cx = macaW / 2, cy = macaH / 2 - 20;
+  const R = Math.min(macaW * 0.30, 145);
+  macaNodes = [
+    { id: 0, label: 'A', x: cx - R * 1.15, y: cy, state: 'idle', range: R },
+    { id: 1, label: 'B', x: cx,             y: cy - 25, state: 'idle', range: R },
+    { id: 2, label: 'C', x: cx + R * 1.15, y: cy, state: 'idle', range: R }
+  ];
+
+  addLog('maca', 'Simulação MACA pronta. Clique em Iniciar ou Passo.', 'info');
+  addLog('maca', 'Topologia: A ↔ B ↔ C  (A e C são terminais ocultos)', 'info');
+  updateMacaStats(); drawMACA();
+}
+
+function macaStart() {
+  if (!macaReady) initMACA();
+  if (macaRunning || macaCurStep >= MACA_STEPS.length) return;
+  macaRunning = true;
+  macaItvl = setInterval(() => {
+    if (macaCurStep >= MACA_STEPS.length) { macaRunning = false; clearInterval(macaItvl); return; }
+    macaNextStep();
+  }, macaStepMs);
+}
+function macaPause() { macaRunning = false; clearInterval(macaItvl); }
+
+function macaNextStep() {
+  if (!macaReady) initMACA();
+  if (macaCurStep >= MACA_STEPS.length) return;
+  const s = MACA_STEPS[macaCurStep];
+  s.fn(macaNodes);
+  if (s.rts) macaRtsCnt += s.rts;
+  if (s.cts) macaCtsCnt += s.cts;
+  if (s.ok)  macaOkCnt  += s.ok;
+  addLog('maca', 'Passo ' + (macaCurStep + 1) + ': ' + s.desc, s.logCls || 'info');
+  macaCurStep++;
+  updateMacaStats(); drawMACA();
+}
+
+function macaSetSpeed(v) {
+  const labels = ['muito lento', 'lento', 'normal', 'rápido', 'muito rápido'];
+  const delays  = [3000, 1800, 1000, 500, 200];
+  macaStepMs = delays[v - 1];
+  document.getElementById('maca-spd-lbl').textContent = labels[v - 1];
+  if (macaRunning) { clearInterval(macaItvl); macaStart(); }
+}
+
+// Animate a message packet from node `from` to node `to`
+function emitMsg(from, to, label, color) {
+  const anim = { fx: from.x, fy: from.y, tx: to.x, ty: to.y, label, color, t: 0 };
+  macaAnims.push(anim);
+  const duration = Math.max(macaStepMs * 0.55, 350);
+  let start = null;
+  function frame(ts) {
+    if (!start) start = ts;
+    anim.t = Math.min((ts - start) / duration, 1);
+    drawMACA();
+    if (anim.t < 1) { requestAnimationFrame(frame); }
+    else { macaAnims = macaAnims.filter(a => a !== anim); drawMACA(); }
+  }
+  requestAnimationFrame(frame);
+}
+
+function drawMACA() {
+  if (!macaCtx) return;
+  const ctx = macaCtx, W = macaW, H = macaH;
+  ctx.clearRect(0, 0, W, H);
+  ctx.fillStyle = '#0d1117'; ctx.fillRect(0, 0, W, H);
+
+  const [A, B, C] = macaNodes;
+
+  // Transmission ranges
+  macaNodes.forEach(n => {
+    ctx.beginPath(); ctx.arc(n.x, n.y, n.range, 0, Math.PI * 2);
+    ctx.fillStyle = '#1e293b33';
+    ctx.fill();
+    ctx.strokeStyle = '#1e293b'; ctx.lineWidth = 1.5;
+    ctx.setLineDash([6, 5]); ctx.stroke(); ctx.setLineDash([]);
+  });
+
+  // Links (within range)
+  function dist(a, b) { return Math.hypot(a.x - b.x, a.y - b.y); }
+  const pairs = [[A, B], [B, C]];
+  ctx.strokeStyle = '#334155'; ctx.lineWidth = 1.5; ctx.setLineDash([4, 4]);
+  pairs.forEach(([a, b]) => {
+    if (dist(a, b) < (a.range + b.range) / 1.5) {
+      ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+    }
+  });
+  ctx.setLineDash([]);
+
+  // Hidden terminal indicator (A ↔ C cross)
+  const mx = (A.x + C.x) / 2, my = (A.y + C.y) / 2;
+  ctx.strokeStyle = '#f8717155'; ctx.lineWidth = 1.5; ctx.setLineDash([6, 5]);
+  ctx.beginPath(); ctx.moveTo(A.x + 32, A.y); ctx.lineTo(C.x - 32, C.y); ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.strokeStyle = '#f87171'; ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(mx - 9, my - 9); ctx.lineTo(mx + 9, my + 9);
+  ctx.moveTo(mx + 9, my - 9); ctx.lineTo(mx - 9, my + 9);
+  ctx.stroke();
+  ctx.fillStyle = '#f87171aa'; ctx.font = '10px sans-serif'; ctx.textAlign = 'center';
+  ctx.fillText('sem alcance', mx, my + 20);
+
+  // Message animations
+  macaAnims.forEach(a => {
+    const x = a.fx + (a.tx - a.fx) * a.t;
+    const y = a.fy + (a.ty - a.fy) * a.t;
+    // Trail
+    ctx.strokeStyle = a.color + '66'; ctx.lineWidth = 1.8;
+    ctx.beginPath(); ctx.moveTo(a.fx, a.fy); ctx.lineTo(x, y); ctx.stroke();
+    // Packet
+    ctx.beginPath(); ctx.arc(x, y, 13, 0, Math.PI * 2);
+    ctx.fillStyle = a.color; ctx.fill();
+    ctx.fillStyle = '#0f172a'; ctx.font = 'bold 8px monospace'; ctx.textAlign = 'center';
+    ctx.fillText(a.label, x, y + 3);
+  });
+
+  // Nodes
+  macaNodes.forEach(n => {
+    const clr = M_CLR[n.state] || '#4ade80';
+    // NAV halo
+    if (n.state === 'nav') {
+      ctx.beginPath(); ctx.arc(n.x, n.y, 40, 0, Math.PI * 2);
+      ctx.fillStyle = '#f472b630'; ctx.fill();
+    }
+    // Glow
+    if (n.state !== 'idle' && n.state !== 'wait') {
+      const grd = ctx.createRadialGradient(n.x, n.y, 22, n.x, n.y, 60);
+      grd.addColorStop(0, clr);
+      grd.addColorStop(1, 'transparent');
+      ctx.globalAlpha = 0.18;
+      ctx.fillStyle = grd; ctx.beginPath(); ctx.arc(n.x, n.y, 60, 0, Math.PI * 2); ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+    // Circle
+    ctx.beginPath(); ctx.arc(n.x, n.y, 28, 0, Math.PI * 2);
+    ctx.fillStyle = clr; ctx.fill();
+    ctx.strokeStyle = '#fff'; ctx.lineWidth = 2.5; ctx.stroke();
+    // Label
+    ctx.fillStyle = '#0f172a'; ctx.font = 'bold 17px monospace'; ctx.textAlign = 'center';
+    ctx.fillText(n.label, n.x, n.y + 7);
+    // State
+    ctx.fillStyle = '#e2e8f0'; ctx.font = '10px sans-serif';
+    ctx.fillText(M_LBL[n.state] || n.state, n.x, n.y + 52);
+  });
+
+  // Step info box
+  const si = macaCurStep < MACA_STEPS.length
+    ? MACA_STEPS[macaCurStep]
+    : MACA_STEPS[MACA_STEPS.length - 1];
+  const boxY = H - 56;
+  ctx.fillStyle = '#1e293b'; ctx.strokeStyle = '#334155'; ctx.lineWidth = 1;
+  ctx.beginPath(); roundRect(ctx, 8, boxY, W - 16, 48, 6);
+  ctx.fill(); ctx.stroke();
+  ctx.fillStyle = '#e2e8f0'; ctx.font = '12px sans-serif'; ctx.textAlign = 'center';
+  const prefix = macaCurStep < MACA_STEPS.length
+    ? 'Próximo — Passo ' + (macaCurStep + 1) + ': '
+    : 'Concluído: ';
+  wrapText(ctx, prefix + si.desc, W / 2, boxY + 16, W - 30, 16);
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + w - r, y); ctx.quadraticCurveTo(x + w, y,     x + w, y + r);
+  ctx.lineTo(x + w, y + h - r); ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+  ctx.lineTo(x + r, y + h); ctx.quadraticCurveTo(x,     y + h, x,     y + h - r);
+  ctx.lineTo(x, y + r); ctx.quadraticCurveTo(x, y, x + r, y);
+  ctx.closePath();
+}
+
+function wrapText(ctx, text, cx, y, maxW, lh) {
+  const words = text.split(' ');
+  const lines = [];
+  let line = '';
+  words.forEach(w => {
+    const test = line ? line + ' ' + w : w;
+    if (ctx.measureText(test).width > maxW && line) { lines.push(line); line = w; }
+    else { line = test; }
+  });
+  if (line) lines.push(line);
+  const startY = y + (lines.length === 1 ? lh / 2 : 0);
+  lines.forEach((l, i) => ctx.fillText(l, cx, startY + i * lh));
+}
+
+function updateMacaStats() {
+  document.getElementById('maca-step-n').textContent = macaCurStep;
+  document.getElementById('maca-rts').textContent    = macaRtsCnt;
+  document.getElementById('maca-cts').textContent    = macaCtsCnt;
+  document.getElementById('maca-ok').textContent     = macaOkCnt;
+}
+
+/* ================================================================
+   RESIZE HANDLING
+   ================================================================ */
+window.addEventListener('resize', () => {
+  const cc = document.getElementById('csma-canvas');
+  csmaW = cc.parentElement.clientWidth - 28;
+  cc.width = csmaW;
+  csmaStations.forEach((s, i) => { s.x = csmaW * (i + 1) / (CSMA_N + 1); });
+  drawCSMA();
+  if (macaReady) initMACA();
+});
+</script>
+</body>
+</html>
